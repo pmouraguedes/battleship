@@ -126,12 +126,12 @@ func (gm *GameManager) handleShipCommand(msg string, connectionId int) string {
 	// Get player
 	player := gm.games[connectionId].Game.GetPlayer(connectionId)
 	if player == nil {
-		return "ERROR hello command not received yet"
+		return "ERROR hello command not received yet\n"
 	}
 
 	err := player.AddShip(shipType, x, y, parts[4])
 	if err != nil {
-		return "ERROR Invalid placement"
+		return "ERROR Invalid placement\n"
 	}
 
 	return fmt.Sprintf("OK SHIP %s\n", shipType)

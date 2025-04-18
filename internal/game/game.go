@@ -6,7 +6,8 @@ import (
 )
 
 type Fleet struct {
-	Ships map[ShipType][]*Ship
+	Ships     map[ShipType][]*Ship
+	Positions map[Vector2]*Ship
 }
 
 type Player struct {
@@ -19,6 +20,8 @@ type Game struct {
 	Players [2]*Player
 }
 
+// Game
+
 func (g *Game) GetPlayer(connectionId int) *Player {
 	if connectionId%2 == 0 {
 		return g.Players[1]
@@ -26,10 +29,29 @@ func (g *Game) GetPlayer(connectionId int) *Player {
 	return g.Players[0]
 }
 
+// Fleet
+
 func NewFleet() *Fleet {
 	return &Fleet{
-		Ships: make(map[ShipType][]*Ship),
+		Ships:     make(map[ShipType][]*Ship),
+		Positions: make(map[Vector2]*Ship),
 	}
+}
+
+func (f *Fleet) addShip(ship *Ship) error {
+	f.Ships[ship.Type] = append(f.Ships[ship.Type], ship)
+	for _, position := range ship.Positions {
+		if _, exists := f.Positions[position]; exists {
+			return fmt.Errorf("position %v already occupied", position)
+		}
+		f.Positions[position] = ship
+	}
+	return nil
+}
+
+func (f *Fleet) GetShipAtPosition(position Vector2) (*Ship, bool) {
+	ship, exists := f.Positions[position]
+	return ship, exists
 }
 
 // Player
@@ -45,7 +67,6 @@ func NewPlayer(id int, name string) *Player {
 }
 
 func (p *Player) AddShip(shipType string, x string, y string, s string) error {
-	// Convert x and y to int
 	xInt, err := strconv.Atoi(x)
 	if err != nil {
 		panic(err)
@@ -59,9 +80,8 @@ func (p *Player) AddShip(shipType string, x string, y string, s string) error {
 	if err != nil {
 		return err
 	}
-	p.Fleet.Ships[ShipType(shipType)] = append(p.Fleet.Ships[ShipType(shipType)], ship)
-
-	return nil
+	err = p.Fleet.addShip(ship)
+	return err
 }
 
 func (p *Player) getNumber() int {
@@ -87,7 +107,6 @@ func NewGame() *Game {
 	}
 }
 
-// add player to game
 func (g *Game) AddPlayer(player *Player) {
 	if player.getNumber() == 1 {
 		g.Players[0] = player

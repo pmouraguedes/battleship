@@ -10,49 +10,6 @@ type Server struct {
 	gm      *GameManager
 }
 
-// func handleMessage(msg string, connectionId int) string {
-// 	// if HELLO command
-// 	// message: HELLO <player_name>
-// 	if strings.HasPrefix(msg, "HELLO") {
-// 		return handleHelloCommand(msg, connectionId)
-// 	}
-//
-// 	// if SHIP command
-// 	// message: SHIP <ship_type> <x> <y> <direction>
-// 	if strings.HasPrefix(msg, "SHIP") {
-// 		return handleShipCommand(msg, connectionId)
-// 	}
-//
-// 	return "Invalid command\n"
-// }
-
-// func handleHelloCommand(msg string, connectionId int) string {
-// 	// assert that the message is a HELLO command
-// 	if !strings.HasPrefix(msg, "HELLO") {
-// 		panic("Should be a HELLO command")
-// 	}
-//
-// 	parts := strings.Fields(msg)
-// 	if len(parts) != 2 {
-// 		return "Invalid HELLO command\n"
-// 	}
-// 	playerName := parts[1]
-// 	if len(playerName) < 3 || len(playerName) > 20 {
-// 		return "Invalid player name\n"
-// 	}
-// 	playerCode := "P" + fmt.Sprintf("%d", connectionId)
-//
-// 	switch connectionId {
-// 	case 1:
-// 		return fmt.Sprintf("WELCOME %s %s\n", playerCode, playerName)
-// 	case 2:
-// 		opponentName := "Opponent"
-// 		return fmt.Sprintf("WELCOME %s %s %s\n", playerCode, playerName, opponentName)
-// 	default:
-// 		panic("Only two players are allowed")
-// 	}
-// }
-
 func (s Server) handleConnection(conn net.Conn, connectionId int) {
 	defer conn.Close()
 	buf := make([]byte, 1024)
