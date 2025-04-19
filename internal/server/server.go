@@ -21,6 +21,7 @@ func (s Server) handleConnection(conn net.Conn, connectionId int) {
 		}
 		log.Printf("[%d] Received: %s", connectionId, string(buf[:n]))
 
+		s.gm.AddConnection(conn, connectionId)
 		data := s.gm.Handle(string(buf[:n]), connectionId)
 
 		_, err = conn.Write([]byte(data))

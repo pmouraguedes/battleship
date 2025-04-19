@@ -8,6 +8,7 @@ import (
 type Fleet struct {
 	Ships     map[ShipType][]*Ship
 	Positions map[Vector2]*Ship
+	Ready     bool
 }
 
 type Player struct {
@@ -27,6 +28,13 @@ func (g *Game) GetPlayer(connectionId int) *Player {
 		return g.Players[1]
 	}
 	return g.Players[0]
+}
+
+func (g *Game) IsReady() bool {
+	if g.Players[0] == nil || g.Players[1] == nil {
+		return false
+	}
+	return g.Players[0].Fleet.Ready && g.Players[1].Fleet.Ready
 }
 
 // Fleet

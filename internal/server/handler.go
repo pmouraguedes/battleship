@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"log"
+	"net"
 	"strings"
 	"sync"
 
@@ -12,27 +13,37 @@ import (
 type GameState struct {
 	Game        *game.Game
 	Connections [2]int
+	ReadyChan   chan int
 }
 
 type GameManager struct {
 	games map[int]*GameState
 	mu    sync.RWMutex
+	Conns map[int]net.Conn
 }
 
 func NewGameManager() *GameManager {
 	return &GameManager{
 		games: make(map[int]*GameState),
+		Conns: make(map[int]net.Conn),
 	}
+}
+
+func (gm *GameManager) AddConnection(conn net.Conn, connectionId int) {
+	gm.mu.Lock()
+	defer gm.mu.Unlock()
+	gm.Conns[connectionId] = conn
 }
 
 // A new game is created as soon as the first client connects.
 func (gm *GameManager) Handle(message string, connectionId int) string {
 	gm.mu.Lock()
-	defer gm.mu.Unlock()
+	// defer gm.mu.Unlock()
 
 	// Check if the game already exists
 	if _, exists := gm.games[connectionId]; exists {
 		log.Println("Game already exists for connectionId:", connectionId)
+		gm.mu.Unlock()
 		return gm.handleMessage(message, connectionId)
 	}
 
@@ -42,6 +53,7 @@ func (gm *GameManager) Handle(message string, connectionId int) string {
 			log.Println("Second player first message, associating with already created game")
 			prevGameState.Connections[1] = connectionId
 			gm.games[connectionId] = prevGameState
+			gm.mu.Unlock()
 			return gm.handleMessage(message, connectionId)
 		} else {
 			panic("No game found for previous player")
@@ -53,10 +65,12 @@ func (gm *GameManager) Handle(message string, connectionId int) string {
 	gameState := &GameState{
 		Game:        game.NewGame(),
 		Connections: [2]int{connectionId, -1},
+		ReadyChan:   make(chan int, 2),
 	}
 
 	gm.games[connectionId] = gameState
 
+	gm.mu.Unlock()
 	return gm.handleMessage(message, connectionId)
 }
 
@@ -69,6 +83,23 @@ func (gm *GameManager) handleMessage(msg string, connectionId int) string {
 	// message: SHIP <ship_type> <x> <y> <direction>
 	if strings.HasPrefix(msg, "SHIP") {
 		return gm.handleShipCommand(msg, connectionId)
+	}
+
+	// message: READY
+	if strings.HasPrefix(msg, "READY") {
+		// set the player as ready and write to the channel
+		gm.handleReadyCommand(msg, connectionId)
+
+		if gm.games[connectionId].Game.IsReady() {
+			return "START P1\n"
+		}
+		// else wait for the other player to be ready
+		for range 2 {
+			id := <-gm.games[connectionId].ReadyChan
+			log.Println("Player", id, "is ready")
+		}
+
+		return "START P1\n"
 	}
 
 	return "Invalid command\n"
@@ -135,6 +166,24 @@ func (gm *GameManager) handleShipCommand(msg string, connectionId int) string {
 	}
 
 	return fmt.Sprintf("OK SHIP %s\n", shipType)
+}
+
+func (gm *GameManager) handleReadyCommand(_ string, connectionId int) {
+	log.Println("Handling ready command for connectionId:", connectionId)
+
+	player := gm.games[connectionId].Game.GetPlayer(connectionId)
+	if player == nil {
+		log.Println("Player not found")
+		return
+	}
+	if player.Fleet.Ready {
+		log.Println("Player already ready")
+		return
+	}
+	player.Fleet.Ready = true
+
+	// write to the channel
+	gm.games[connectionId].ReadyChan <- connectionId
 }
 
 func isValidDirection(s string) bool {
