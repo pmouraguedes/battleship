@@ -6,18 +6,20 @@ import (
 )
 
 type Player struct {
-	id    int
-	name  string
-	Fleet *Fleet
+	id        int
+	name      string
+	Fleet     *Fleet
+	TurnCount int
 }
 
 func newPlayer(id int, name string) *Player {
 	fleet := newFleet()
 
 	return &Player{
-		id:    id,
-		name:  name,
-		Fleet: fleet,
+		id:        id,
+		name:      name,
+		Fleet:     fleet,
+		TurnCount: 1,
 	}
 }
 

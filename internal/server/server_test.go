@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/pmouraguedes/battleship/internal/game"
 )
 
 var (
@@ -98,7 +100,7 @@ func sendAttackMessages(conn net.Conn, clientCode string) {
 	}
 
 	for {
-		for range 1 {
+		for range game.TURN_MAX_ATTACKS {
 			if turnPlayerCode != clientCode {
 				log.Printf("Client %s waiting for turn", clientCode)
 				<-singleChan
@@ -124,7 +126,6 @@ func sendAttackMessages(conn net.Conn, clientCode string) {
 				i++
 			}
 			if i > 9 {
-				// log.Printf("i > 9")
 				break
 			}
 		}
@@ -135,7 +136,6 @@ func sendAttackMessages(conn net.Conn, clientCode string) {
 		singleChan <- 1
 
 		if i > 9 {
-			// log.Printf("i > 9")
 			break
 		}
 	}

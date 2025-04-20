@@ -1,5 +1,9 @@
 package game
 
+const (
+	TURN_MAX_ATTACKS = 3
+)
+
 type Game struct {
 	players   [2]*Player
 	TurnCount int

@@ -199,21 +199,30 @@ func (gm *GameManager) handleAttackCommand(msg string, connectionId int) (string
 		return "ERROR Invalid ATTACK command\n", fmt.Errorf("invalid ATTACK command")
 	}
 
-	player := gm.getGame(connectionId).GetPlayer(connectionId)
+	thisGame := gm.getGame(connectionId)
+
+	player := thisGame.GetPlayer(connectionId)
 	if player == nil {
 		return "ERROR hello command not received yet\n", fmt.Errorf("hello command not received yet")
 	}
 
-	opponent := gm.getGame(connectionId).GetOtherPlayer(connectionId)
+	opponent := thisGame.GetOtherPlayer(connectionId)
 	if opponent == nil {
 		return "ERROR opponent not found\n", fmt.Errorf("opponent not found")
 	}
 
-	if !gm.getGame(connectionId).IsPlayersTurn(player) {
+	if !thisGame.IsPlayersTurn(player) {
 		return "ERROR not your turn\n", fmt.Errorf("not your turn")
 	}
 
-	gm.getGame(connectionId).TurnCount++
+	log.Printf("Game turn count: %d", thisGame.TurnCount)
+	log.Printf("Player turn count: %d", player.TurnCount)
+	if player.TurnCount >= game.TURN_MAX_ATTACKS {
+		player.TurnCount = 1
+		gm.getGame(connectionId).TurnCount++
+	} else {
+		player.TurnCount++
+	}
 
 	x := parts[1]
 	y := parts[2]
