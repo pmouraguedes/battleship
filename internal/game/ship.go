@@ -18,20 +18,20 @@ type Vector2 struct {
 
 // Ship
 type Ship struct {
-	Type      ShipType
-	Length    int
-	Positions []Vector2
+	shipType  ShipType
+	length    int
+	positions []Vector2
 }
 
 type ShipSpec struct {
-	Length  int
-	Offsets []Vector2
+	length  int
+	offsets []Vector2
 }
 
 var shipSpecsH = map[ShipType]ShipSpec{
 	Carrier: {
-		Length: 5,
-		Offsets: []Vector2{
+		length: 5,
+		offsets: []Vector2{
 			{0, 0},
 			{1, 0},
 			{2, 0},
@@ -40,8 +40,8 @@ var shipSpecsH = map[ShipType]ShipSpec{
 		},
 	},
 	Cruiser: {
-		Length: 4,
-		Offsets: []Vector2{
+		length: 4,
+		offsets: []Vector2{
 			{0, 0},
 			{1, 0},
 			{2, 0},
@@ -49,23 +49,23 @@ var shipSpecsH = map[ShipType]ShipSpec{
 		},
 	},
 	Battleship: {
-		Length: 3,
-		Offsets: []Vector2{
+		length: 3,
+		offsets: []Vector2{
 			{0, 0},
 			{1, 0},
 			{2, 0},
 		},
 	},
 	Destroyer: {
-		Length: 2,
-		Offsets: []Vector2{
+		length: 2,
+		offsets: []Vector2{
 			{0, 0},
 			{1, 0},
 		},
 	},
 	Submarine: {
-		Length: 1,
-		Offsets: []Vector2{
+		length: 1,
+		offsets: []Vector2{
 			{0, 0},
 		},
 	},
@@ -73,8 +73,8 @@ var shipSpecsH = map[ShipType]ShipSpec{
 
 var shipSpecsV = map[ShipType]ShipSpec{
 	Carrier: {
-		Length: 5,
-		Offsets: []Vector2{
+		length: 5,
+		offsets: []Vector2{
 			{0, 0},
 			{0, 1},
 			{0, 2},
@@ -83,8 +83,8 @@ var shipSpecsV = map[ShipType]ShipSpec{
 		},
 	},
 	Cruiser: {
-		Length: 4,
-		Offsets: []Vector2{
+		length: 4,
+		offsets: []Vector2{
 			{0, 0},
 			{0, 1},
 			{0, 2},
@@ -92,29 +92,29 @@ var shipSpecsV = map[ShipType]ShipSpec{
 		},
 	},
 	Battleship: {
-		Length: 3,
-		Offsets: []Vector2{
+		length: 3,
+		offsets: []Vector2{
 			{0, 0},
 			{0, 1},
 			{0, 2},
 		},
 	},
 	Destroyer: {
-		Length: 2,
-		Offsets: []Vector2{
+		length: 2,
+		offsets: []Vector2{
 			{0, 0},
 			{0, 1},
 		},
 	},
 	Submarine: {
-		Length: 1,
-		Offsets: []Vector2{
+		length: 1,
+		offsets: []Vector2{
 			{0, 0},
 		},
 	},
 }
 
-func NewShip(shipType ShipType, x int, y int, direction string) (*Ship, error) {
+func newShip(shipType ShipType, x int, y int, direction string) (*Ship, error) {
 	var shipSpec ShipSpec
 	switch direction {
 	case "H":
@@ -125,12 +125,12 @@ func NewShip(shipType ShipType, x int, y int, direction string) (*Ship, error) {
 		return nil, fmt.Errorf("invalid direction: %s", direction)
 	}
 
-	length := shipSpec.Length
+	length := shipSpec.length
 	positions := make([]Vector2, length)
 
 	for i := range length {
-		newX := x + shipSpec.Offsets[i].X
-		newY := y + shipSpec.Offsets[i].Y
+		newX := x + shipSpec.offsets[i].X
+		newY := y + shipSpec.offsets[i].Y
 		if !isValidCoordinate(newX) || !isValidCoordinate(newY) {
 			return nil, fmt.Errorf("invalid coordinates: (%d, %d)", newX, newY)
 		}
@@ -141,9 +141,9 @@ func NewShip(shipType ShipType, x int, y int, direction string) (*Ship, error) {
 	}
 
 	return &Ship{
-		Type:      shipType,
-		Length:    length,
-		Positions: positions,
+		shipType:  shipType,
+		length:    length,
+		positions: positions,
 	}, nil
 }
 
