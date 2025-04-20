@@ -88,7 +88,10 @@ func (gm *GameManager) handleMessage(msg string, connectionId int) string {
 	// message: READY
 	if strings.HasPrefix(msg, "READY") {
 		// set the player as ready and write to the channel
-		gm.handleReadyCommand(msg, connectionId)
+		err := gm.handleReadyCommand(msg, connectionId)
+		if err != nil {
+			return "ERROR " + err.Error() + "\n"
+		}
 
 		if gm.games[connectionId].Game.IsReady() {
 			return "START P1\n"
@@ -168,22 +171,29 @@ func (gm *GameManager) handleShipCommand(msg string, connectionId int) string {
 	return fmt.Sprintf("OK SHIP %s\n", shipType)
 }
 
-func (gm *GameManager) handleReadyCommand(_ string, connectionId int) {
+func (gm *GameManager) handleReadyCommand(_ string, connectionId int) error {
 	log.Println("Handling ready command for connectionId:", connectionId)
 
 	player := gm.games[connectionId].Game.GetPlayer(connectionId)
 	if player == nil {
 		log.Println("Player not found")
-		return
+		return fmt.Errorf("player not found")
 	}
 	if player.Fleet.Ready {
 		log.Println("Player already ready")
-		return
+		return fmt.Errorf("player already ready")
 	}
+	if player.Fleet.UnitSize < game.FLEET_UNIT_SIZE {
+		log.Println("Player fleet not full")
+		return fmt.Errorf("player fleet not full")
+	}
+
 	player.Fleet.Ready = true
 
 	// write to the channel
 	gm.games[connectionId].ReadyChan <- connectionId
+
+	return nil
 }
 
 func isValidDirection(s string) bool {

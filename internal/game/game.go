@@ -9,6 +9,7 @@ type Fleet struct {
 	Ships     map[ShipType][]*Ship
 	Positions map[Vector2]*Ship
 	Ready     bool
+	UnitSize  int
 }
 
 type Player struct {
@@ -20,6 +21,10 @@ type Player struct {
 type Game struct {
 	Players [2]*Player
 }
+
+const (
+	FLEET_UNIT_SIZE = 5*1 + 4*1 + 3*2 + 2*3 + 1*4
+)
 
 // Game
 
@@ -53,6 +58,9 @@ func (f *Fleet) addShip(ship *Ship) error {
 			return fmt.Errorf("position %v already occupied", position)
 		}
 		f.Positions[position] = ship
+
+		// increment fleet unit size
+		f.UnitSize++
 	}
 	return nil
 }
