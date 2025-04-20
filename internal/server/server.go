@@ -22,11 +22,12 @@ func (s Server) handleConnection(conn net.Conn, connectionId int) {
 		log.Printf("[%d] Received: %s", connectionId, string(buf[:n]))
 
 		// s.gm.AddConnection(conn, connectionId)
-		data, err := s.gm.Handle(string(buf[:n]), connectionId)
+		data, err := s.gm.handle(string(buf[:n]), connectionId)
 		if err != nil {
 			log.Println(err)
 		}
 
+		log.Printf("[%d] Sending: %s...", connectionId, data)
 		_, err = conn.Write([]byte(data))
 		if err != nil {
 			log.Println(err)

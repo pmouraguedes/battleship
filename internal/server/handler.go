@@ -53,21 +53,7 @@ func (gm *GameManager) handle(msg string, connectionId int) (string, error) {
 	// message: READY
 	if strings.HasPrefix(msg, "READY") {
 		// set the player as ready and write to the channel
-		err := gm.handleReadyCommand(msg, connectionId)
-		if err != nil {
-			return "ERROR\n", err
-		}
-
-		if gm.games[connectionId].game.IsReady() {
-			return "START P1\n", nil
-		}
-		// else wait for the other player to be ready
-		for range 2 {
-			id := <-gm.games[connectionId].readyChan
-			log.Println("Player", id, "is ready")
-		}
-
-		return "START P1\n", nil
+		return gm.handleReadyCommand(msg, connectionId)
 	}
 
 	return "ERROR Invalid command\n", fmt.Errorf("invalid command")
@@ -95,7 +81,7 @@ func (gm *GameManager) handleHelloCommand(msg string, connectionId int) (string,
 	// With HELLO, the game should not exist for this connectionId
 	if _, exists := gm.games[connectionId]; exists {
 		log.Println("Game already exists for connectionId:", connectionId)
-		return "", fmt.Errorf("game already exists for connectionId: %d", connectionId)
+		return "ERROR Game already exists\n", fmt.Errorf("game already exists for connectionId %d", connectionId)
 	}
 
 	// if connectionId is even, use the game of previous connectionId
@@ -113,7 +99,7 @@ func (gm *GameManager) handleHelloCommand(msg string, connectionId int) (string,
 		gameState := &GameState{
 			game:        game.NewGame(),
 			connections: [2]int{connectionId, -1},
-			readyChan:   make(chan int, 2),
+			readyChan:   make(chan int),
 		}
 
 		gm.games[connectionId] = gameState
@@ -166,29 +152,36 @@ func (gm *GameManager) handleShipCommand(msg string, connectionId int) (string, 
 	return fmt.Sprintf("OK SHIP %s\n", shipType), nil
 }
 
-func (gm *GameManager) handleReadyCommand(_ string, connectionId int) error {
+func (gm *GameManager) handleReadyCommand(_ string, connectionId int) (string, error) {
 	log.Println("Handling ready command for connectionId:", connectionId)
 
 	player := gm.games[connectionId].game.GetPlayer(connectionId)
 	if player == nil {
 		log.Println("Player not found")
-		return fmt.Errorf("player not found")
+		return "ERROR player not found\n", fmt.Errorf("player not found")
 	}
 	if player.Fleet.Ready {
 		log.Println("Player already ready")
-		return fmt.Errorf("player already ready")
+		return "ERROR player already ready\n", fmt.Errorf("player already ready")
 	}
 	if player.Fleet.UnitSize < game.FLEET_UNIT_SIZE {
 		log.Println("Player fleet not full")
-		return fmt.Errorf("player fleet not full")
+		return "ERROR player fleet not full\n", fmt.Errorf("player fleet not full")
 	}
 
 	player.Fleet.Ready = true
 
-	// write to the channel
-	gm.games[connectionId].readyChan <- connectionId
+	if gm.games[connectionId].game.IsReady() {
+		// write to the channel to notify the other player
+		gm.games[connectionId].readyChan <- connectionId
+		return "START P1\n", nil
+	}
 
-	return nil
+	// else wait for the other player to be ready
+	id := <-gm.games[connectionId].readyChan
+	log.Println("Player", id, "is ready")
+
+	return "START P1\n", nil
 }
 
 func isValidDirection(s string) bool {
