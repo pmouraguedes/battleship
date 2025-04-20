@@ -21,6 +21,7 @@ type Ship struct {
 	shipType  ShipType
 	length    int
 	positions []Vector2
+	remaining int
 }
 
 type ShipSpec struct {
@@ -144,6 +145,7 @@ func newShip(shipType ShipType, x int, y int, direction string) (*Ship, error) {
 		shipType:  shipType,
 		length:    length,
 		positions: positions,
+		remaining: length,
 	}, nil
 }
 
@@ -152,4 +154,12 @@ func isValidCoordinate(n int) bool {
 		return false
 	}
 	return true
+}
+
+func (s *Ship) receiveAttack() {
+	s.remaining--
+}
+
+func (s *Ship) isSunk() bool {
+	return s.remaining == 0
 }

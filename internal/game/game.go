@@ -1,12 +1,14 @@
 package game
 
 type Game struct {
-	players [2]*Player
+	players   [2]*Player
+	TurnCount int
 }
 
 func NewGame() *Game {
 	return &Game{
-		players: [2]*Player{},
+		players:   [2]*Player{},
+		TurnCount: 1,
 	}
 }
 
@@ -15,6 +17,10 @@ func (g *Game) GetPlayer(connectionId int) *Player {
 		return g.players[1]
 	}
 	return g.players[0]
+}
+
+func (g *Game) GetOtherPlayer(connectionId int) *Player {
+	return g.GetPlayer(connectionId ^ 1)
 }
 
 func (g *Game) IsReady() bool {
@@ -34,4 +40,11 @@ func (g *Game) AddPlayer(connectionId int, playerName string) *Player {
 	}
 
 	return player
+}
+
+func (g *Game) IsPlayersTurn(player *Player) bool {
+	if g.TurnCount%2 == 0 {
+		return player.getNumber() == 2
+	}
+	return player.getNumber() == 1
 }

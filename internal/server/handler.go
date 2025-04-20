@@ -56,6 +56,11 @@ func (gm *GameManager) handle(msg string, connectionId int) (string, error) {
 		return gm.handleReadyCommand(msg, connectionId)
 	}
 
+	// message: ATTACK <x> <y>
+	if strings.HasPrefix(msg, "ATTACK") {
+		return gm.handleAttackCommand(msg, connectionId)
+	}
+
 	return "ERROR Invalid command\n", fmt.Errorf("invalid command")
 }
 
@@ -111,8 +116,7 @@ func (gm *GameManager) handleHelloCommand(msg string, connectionId int) (string,
 	case 1:
 		return fmt.Sprintf("WELCOME %s %s\n", player.GetPlayerCode(), playerName), nil
 	case 2:
-		opponentName := "Opponent"
-		return fmt.Sprintf("WELCOME %s %s %s\n", player.GetPlayerCode(), playerName, opponentName), nil
+		return fmt.Sprintf("WELCOME %s %s\n", player.GetPlayerCode(), playerName), nil
 	default:
 		panic("Only two players are allowed")
 	}
@@ -139,7 +143,7 @@ func (gm *GameManager) handleShipCommand(msg string, connectionId int) (string, 
 	}
 
 	// Get player
-	player := gm.games[connectionId].game.GetPlayer(connectionId)
+	player := gm.getGame(connectionId).GetPlayer(connectionId)
 	if player == nil {
 		return "ERROR hello command not received yet\n", fmt.Errorf("hello command not received yet")
 	}
@@ -182,6 +186,52 @@ func (gm *GameManager) handleReadyCommand(_ string, connectionId int) (string, e
 	log.Println("Player", id, "is ready")
 
 	return "START P1\n", nil
+}
+
+func (gm *GameManager) handleAttackCommand(msg string, connectionId int) (string, error) {
+	// assert that the message is a ATTACK command
+	if !strings.HasPrefix(msg, "ATTACK") {
+		panic("Should be a ATTACK command")
+	}
+
+	parts := strings.Fields(msg)
+	if len(parts) != 3 {
+		return "ERROR Invalid ATTACK command\n", fmt.Errorf("invalid ATTACK command")
+	}
+
+	player := gm.getGame(connectionId).GetPlayer(connectionId)
+	if player == nil {
+		return "ERROR hello command not received yet\n", fmt.Errorf("hello command not received yet")
+	}
+
+	opponent := gm.getGame(connectionId).GetOtherPlayer(connectionId)
+	if opponent == nil {
+		return "ERROR opponent not found\n", fmt.Errorf("opponent not found")
+	}
+
+	if !gm.getGame(connectionId).IsPlayersTurn(player) {
+		return "ERROR not your turn\n", fmt.Errorf("not your turn")
+	}
+
+	gm.getGame(connectionId).TurnCount++
+
+	x := parts[1]
+	y := parts[2]
+	hit, sunkShipType := opponent.ReceiveAttack(x, y)
+
+	// TODO check if the game is over
+
+	if hit {
+		if sunkShipType != nil {
+			// sunk
+			return fmt.Sprintf("SUNK %s %s %s\n", x, y, *sunkShipType), nil
+		} else {
+			// hit but not sunk
+			return fmt.Sprintf("HIT %s %s\n", x, y), nil
+		}
+	}
+
+	return fmt.Sprintf("MISS %s %s\n", x, y), nil
 }
 
 func isValidDirection(s string) bool {

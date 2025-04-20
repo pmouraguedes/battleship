@@ -6,9 +6,8 @@ import (
 )
 
 type Player struct {
-	id   int
-	name string
-	// TODO check usage of these public fields in handler.go
+	id    int
+	name  string
 	Fleet *Fleet
 }
 
@@ -20,6 +19,19 @@ func newPlayer(id int, name string) *Player {
 		name:  name,
 		Fleet: fleet,
 	}
+}
+
+func (p *Player) ReceiveAttack(x string, y string) (bool, *ShipType) {
+	xInt, err := strconv.Atoi(x)
+	if err != nil {
+		panic(err)
+	}
+	yInt, err := strconv.Atoi(y)
+	if err != nil {
+		panic(err)
+	}
+	position := Vector2{xInt, yInt}
+	return p.Fleet.receiveAttack(position)
 }
 
 func (p *Player) AddShip(shipType string, x string, y string, s string) error {
