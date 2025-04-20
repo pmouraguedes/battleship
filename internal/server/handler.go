@@ -39,7 +39,7 @@ func (gm *GameManager) getGame(connectionId int) *game.Game {
 // }
 
 // A new game is created as soon as the first client connects.
-func (gm *GameManager) Handle(msg string, connectionId int) (string, error) {
+func (gm *GameManager) handle(msg string, connectionId int) (string, error) {
 	// message: HELLO <player_name>
 	if strings.HasPrefix(msg, "HELLO") {
 		return gm.handleHelloCommand(msg, connectionId)
