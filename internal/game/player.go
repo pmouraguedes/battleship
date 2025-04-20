@@ -12,7 +12,7 @@ type Player struct {
 	Fleet *Fleet
 }
 
-func NewPlayer(id int, name string) *Player {
+func newPlayer(id int, name string) *Player {
 	fleet := newFleet()
 
 	return &Player{
@@ -40,14 +40,14 @@ func (p *Player) AddShip(shipType string, x string, y string, s string) error {
 	return err
 }
 
+func (p *Player) GetPlayerCode() string {
+	return "P" + fmt.Sprintf("%d", p.getNumber())
+}
+
 func (p *Player) getNumber() int {
 	number := 1
 	if p.id%2 == 0 {
 		number = 2
 	}
 	return number
-}
-
-func (p *Player) GetPlayerCode() string {
-	return "P" + fmt.Sprintf("%d", p.getNumber())
 }

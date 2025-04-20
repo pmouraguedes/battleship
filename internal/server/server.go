@@ -21,8 +21,11 @@ func (s Server) handleConnection(conn net.Conn, connectionId int) {
 		}
 		log.Printf("[%d] Received: %s", connectionId, string(buf[:n]))
 
-		s.gm.AddConnection(conn, connectionId)
-		data := s.gm.Handle(string(buf[:n]), connectionId)
+		// s.gm.AddConnection(conn, connectionId)
+		data, err := s.gm.Handle(string(buf[:n]), connectionId)
+		if err != nil {
+			log.Println(err)
+		}
 
 		_, err = conn.Write([]byte(data))
 		if err != nil {
@@ -60,6 +63,6 @@ func (s Server) Start() {
 func NewServer(addressString string) Server {
 	return Server{
 		address: addressString,
-		gm:      NewGameManager(),
+		gm:      newGameManager(),
 	}
 }

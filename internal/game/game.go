@@ -24,10 +24,14 @@ func (g *Game) IsReady() bool {
 	return g.players[0].Fleet.Ready && g.players[1].Fleet.Ready
 }
 
-func (g *Game) AddPlayer(player *Player) {
+func (g *Game) AddPlayer(connectionId int, playerName string) *Player {
+	player := newPlayer(connectionId, playerName)
+
 	if player.getNumber() == 1 {
 		g.players[0] = player
 	} else {
 		g.players[1] = player
 	}
+
+	return player
 }
