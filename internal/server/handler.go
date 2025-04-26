@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pmouraguedes/battleship/internal/game"
 )
@@ -51,10 +52,16 @@ func (gm *GameManager) handle(conn net.Conn, connectionId int) (string, error) {
 	log.Printf("[server %d] handle", connectionId)
 
 	thisGame := gm.getGame(connectionId)
-	// gameState := gm.games[connectionId]
+	gameState := gm.games[connectionId]
 
 	for {
+		if gm.getGame(connectionId).TurnCount > 3 {
+			log.Printf("[server %d] game over", connectionId)
+			return "", fmt.Errorf("game over")
+		}
+
 		player := thisGame.GetPlayer(connectionId)
+
 		var playerState game.PlayerStatus
 		if player == nil {
 			playerState = game.WAITING_FOR_HELLO
@@ -97,11 +104,51 @@ func (gm *GameManager) handle(conn net.Conn, connectionId int) (string, error) {
 			}
 			sendMessage(conn, response)
 
-			// if thisGame.IsReady() {
-			// 	thisGame.State = game.PLAYING
-			// } else {
+			if thisGame.IsReady() {
+				if player.GetPlayerCode() == "P1" {
+					player.State = game.PLAYING
+					time.Sleep(50 * time.Millisecond) // wait for the START message to be sent
+					sendMessage(conn, "TURN P1\n")
+				} else {
+					player.State = game.WAITING_FOR_ATTACK
+				}
+			}
+			// else {
 			// 	gameState.readyChan <- thisGame.GetPlayer(connectionId).GetPlayerCode()
 			// }
+
+		case game.PLAYING:
+			for i := 0; i != game.TURN_MAX_ATTACKS; i++ {
+				log.Printf("[server %d] PLAYING", connectionId)
+				msg, err := waitForMessage(conn)
+				if err != nil {
+					log.Printf("[server %d] error reading message: %v", connectionId, err)
+					return "", err
+				}
+				log.Printf("[server %d] PLAYING received message: %s", connectionId, msg)
+				response, err := gm.handleAttackCommand(msg, connectionId)
+				if err != nil {
+					log.Printf("[server %d] error handling command: %v", connectionId, err)
+					return "", err
+				}
+				sendMessage(conn, response)
+			}
+			player.State = game.WAITING_FOR_ATTACK
+			oponent := thisGame.GetOtherPlayer(connectionId)
+			gameState.readyChan <- oponent.GetPlayerCode()
+
+		case game.WAITING_FOR_ATTACK:
+			log.Printf("[server %d] WAITING_FOR_ATTACK", connectionId)
+			// read from the channel
+			signalMsg := <-gameState.readyChan
+			log.Printf("[server %d] received signal: %s", connectionId, signalMsg)
+
+			if signalMsg != thisGame.GetPlayer(connectionId).GetPlayerCode() {
+				return "", fmt.Errorf("invalid state, should be %s", thisGame.GetPlayer(connectionId).GetPlayerCode())
+			}
+
+			sendMessage(conn, fmt.Sprintf("TURN %s\n", player.GetPlayerCode()))
+			player.State = game.PLAYING
 		}
 	}
 
@@ -188,7 +235,7 @@ func (gm *GameManager) handleHelloCommand(msg string, connectionId int) (string,
 }
 
 func (gm *GameManager) handleShipCommand(msg string, connectionId int) (string, error) {
-	// READY
+	// READY - sent by the client when all ships are placed
 	if strings.HasPrefix(msg, "READY") {
 		return gm.handleReadyCommand(msg, connectionId)
 	}
@@ -226,7 +273,7 @@ func (gm *GameManager) handleShipCommand(msg string, connectionId int) (string, 
 	return fmt.Sprintf("OK SHIP %s\n", shipType), nil
 }
 
-func (gm *GameManager) handleReadyCommand(msg string, connectionId int) (string, error) {
+func (gm *GameManager) handleReadyCommand(_ string, connectionId int) (string, error) {
 	log.Printf("[server %d] handleReadyCommand", connectionId)
 
 	player := gm.games[connectionId].game.GetPlayer(connectionId)
@@ -330,74 +377,74 @@ func (gm *GameManager) handleReadyCommand(msg string, connectionId int) (string,
 // 	return nil
 // }
 
-// func (gm *GameManager) handleAttackCommand(msg string, connectionId int) (string, error) {
-// 	// assert that the message is a ATTACK command
-// 	if !strings.HasPrefix(msg, "ATTACK") {
-// 		panic("Should be a ATTACK command")
-// 	}
-//
-// 	parts := strings.Fields(msg)
-// 	if len(parts) != 3 {
-// 		return "ERROR Invalid ATTACK command\n", fmt.Errorf("invalid ATTACK command")
-// 	}
-//
-// 	thisGame := gm.getGame(connectionId)
-//
-// 	player := thisGame.GetPlayer(connectionId)
-// 	if player == nil {
-// 		return "ERROR hello command not received yet\n", fmt.Errorf("hello command not received yet")
-// 	}
-//
-// 	opponent := thisGame.GetOtherPlayer(connectionId)
-// 	if opponent == nil {
-// 		return "ERROR opponent not found\n", fmt.Errorf("opponent not found")
-// 	}
-//
-// 	if !thisGame.IsPlayersTurn(player) {
-// 		return "ERROR not your turn\n", fmt.Errorf("not your turn")
-// 	}
-//
-// 	lastAttack := false
-//
-// 	log.Printf("Game turn count: %d", thisGame.TurnCount)
-// 	log.Printf("Player turn count: %d", player.TurnCount)
-// 	if player.TurnCount >= game.TURN_MAX_ATTACKS {
-// 		lastAttack = true
-// 		player.TurnCount = 1
-// 		gm.getGame(connectionId).TurnCount++
-// 	} else {
-// 		player.TurnCount++
-// 	}
-//
-// 	x := parts[1]
-// 	y := parts[2]
-// 	hit, sunkShipType := opponent.ReceiveAttack(x, y)
-//
-// 	// TODO check if the game is over
-//
-// 	var attackResult string
-// 	if hit {
-// 		if sunkShipType != nil {
-// 			// sunk
-// 			attackResult = fmt.Sprintf("SUNK %s %s %s\n", x, y, *sunkShipType)
-// 		} else {
-// 			// hit but not sunk
-// 			attackResult = fmt.Sprintf("HIT %s %s\n", x, y)
-// 		}
-// 	} else {
-// 		attackResult = fmt.Sprintf("MISS %s %s\n", x, y)
-// 	}
-//
-// 	if lastAttack {
-// 		gm.sendMessage(connectionId, player.GetPlayerCode(), attackResult)
-// 		time.Sleep(50 * time.Millisecond) // wait for the attack result to be sent
-// 		gm.sendMessage(gm.games[connectionId].getOtherConnectionId(connectionId), opponent.GetPlayerCode(), "TURN "+opponent.GetPlayerCode()+"\n")
-// 		// return "TURN " + opponent.GetPlayerCode() + "\n", nil
-// 		return attackResult, nil
-// 	} else {
-// 		return attackResult, nil
-// 	}
-// }
+func (gm *GameManager) handleAttackCommand(msg string, connectionId int) (string, error) {
+	// assert that the message is a ATTACK command
+	if !strings.HasPrefix(msg, "ATTACK") {
+		panic("Should be a ATTACK command")
+	}
+
+	parts := strings.Fields(msg)
+	if len(parts) != 3 {
+		return "ERROR Invalid ATTACK command\n", fmt.Errorf("invalid ATTACK command")
+	}
+
+	thisGame := gm.getGame(connectionId)
+
+	player := thisGame.GetPlayer(connectionId)
+	if player == nil {
+		return "ERROR hello command not received yet\n", fmt.Errorf("hello command not received yet")
+	}
+
+	opponent := thisGame.GetOtherPlayer(connectionId)
+	if opponent == nil {
+		return "ERROR opponent not found\n", fmt.Errorf("opponent not found")
+	}
+
+	if !thisGame.IsPlayersTurn(player) {
+		return "ERROR not your turn\n", fmt.Errorf("not your turn")
+	}
+
+	// lastAttack := false
+
+	log.Printf("Game turn count: %d", thisGame.TurnCount)
+	log.Printf("Player turn count: %d", player.TurnCount)
+	if player.TurnCount >= game.TURN_MAX_ATTACKS {
+		// lastAttack = true
+		player.TurnCount = 1
+		gm.getGame(connectionId).TurnCount++
+	} else {
+		player.TurnCount++
+	}
+
+	x := parts[1]
+	y := parts[2]
+	hit, sunkShipType := opponent.ReceiveAttack(x, y)
+
+	// TODO check if the game is over
+
+	var attackResult string
+	if hit {
+		if sunkShipType != nil {
+			// sunk
+			attackResult = fmt.Sprintf("SUNK %s %s %s\n", x, y, *sunkShipType)
+		} else {
+			// hit but not sunk
+			attackResult = fmt.Sprintf("HIT %s %s\n", x, y)
+		}
+	} else {
+		attackResult = fmt.Sprintf("MISS %s %s\n", x, y)
+	}
+
+	// if lastAttack {
+	// 	gm.sendMessage(connectionId, player.GetPlayerCode(), attackResult)
+	// 	time.Sleep(50 * time.Millisecond) // wait for the attack result to be sent
+	// 	gm.sendMessage(gm.games[connectionId].getOtherConnectionId(connectionId), opponent.GetPlayerCode(), "TURN "+opponent.GetPlayerCode()+"\n")
+	// 	// return "TURN " + opponent.GetPlayerCode() + "\n", nil
+	// 	return attackResult, nil
+	// } else {
+	return attackResult, nil
+	// }
+}
 
 func isValidDirection(s string) bool {
 	if len(s) != 1 {

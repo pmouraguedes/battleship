@@ -3,9 +3,9 @@ package game
 type GameStatus int
 
 const (
-	// WAITING_FOR_HELLO GameStatus = iota
-	// SETUP_FLEET
-	PLAYING GameStatus = iota
+// WAITING_FOR_HELLO GameStatus = iota
+// SETUP_FLEET
+// PLAYING GameStatus = iota
 )
 
 const (

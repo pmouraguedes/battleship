@@ -10,7 +10,8 @@ type PlayerStatus int
 const (
 	WAITING_FOR_HELLO PlayerStatus = iota
 	SETUP_FLEET
-	// PLAYING
+	PLAYING
+	WAITING_FOR_ATTACK
 )
 
 type Player struct {
