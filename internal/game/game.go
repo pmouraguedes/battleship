@@ -1,10 +1,19 @@
 package game
 
+type GameStatus int
+
+const (
+	// WAITING_FOR_HELLO GameStatus = iota
+	// SETUP_FLEET
+	PLAYING GameStatus = iota
+)
+
 const (
 	TURN_MAX_ATTACKS = 3
 )
 
 type Game struct {
+	State     GameStatus
 	players   [2]*Player
 	TurnCount int
 }

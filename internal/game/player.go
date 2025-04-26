@@ -5,11 +5,20 @@ import (
 	"strconv"
 )
 
+type PlayerStatus int
+
+const (
+	WAITING_FOR_HELLO PlayerStatus = iota
+	SETUP_FLEET
+	// PLAYING
+)
+
 type Player struct {
 	id        int
 	name      string
 	Fleet     *Fleet
 	TurnCount int
+	State     PlayerStatus
 }
 
 func newPlayer(id int, name string) *Player {
