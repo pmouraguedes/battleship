@@ -18,17 +18,17 @@ type GameState struct {
 }
 
 type GameManager struct {
-	games map[int]*GameState
+	games map[int]*GameState // connectionId -> GameState
 	mu    sync.RWMutex
-	conns map[int]net.Conn
+	conns map[int]net.Conn // connectionId -> net.Conn
 }
 
-func (gs *GameState) getOtherConnectionId(connectionId int) int {
-	if connectionId == gs.connections[0] {
-		return gs.connections[1]
-	}
-	return gs.connections[0]
-}
+// func (gs *GameState) getOtherConnectionId(connectionId int) int {
+// 	if connectionId == gs.connections[0] {
+// 		return gs.connections[1]
+// 	}
+// 	return gs.connections[0]
+// }
 
 func newGameManager() *GameManager {
 	return &GameManager{
@@ -37,27 +37,33 @@ func newGameManager() *GameManager {
 	}
 }
 
+func (gm *GameManager) getOtherConn(connectionId int) net.Conn {
+	if connectionId%2 == 0 {
+		return gm.conns[connectionId-1]
+	} else {
+		return gm.conns[connectionId+1]
+	}
+}
+
 func (gm *GameManager) getGame(connectionId int) *game.Game {
 	return gm.games[connectionId].game
 }
 
 func (gm *GameManager) addConnection(conn net.Conn, connectionId int) {
-	// gm.mu.Lock()
-	// defer gm.mu.Unlock()
 	gm.conns[connectionId] = conn
 }
 
 // A new game is created as soon as the first client connects.
-func (gm *GameManager) handle(conn net.Conn, connectionId int) (string, error) {
+func (gm *GameManager) handle(conn net.Conn, connectionId int) error {
 	log.Printf("[server %d] handle", connectionId)
 
 	thisGame := gm.getGame(connectionId)
 	gameState := gm.games[connectionId]
 
 	for {
-		if gm.getGame(connectionId).TurnCount > 3 {
+		if gm.getGame(connectionId).TurnCount > 1 {
 			log.Printf("[server %d] game over", connectionId)
-			return "", fmt.Errorf("game over")
+			return nil
 		}
 
 		player := thisGame.GetPlayer(connectionId)
@@ -72,17 +78,17 @@ func (gm *GameManager) handle(conn net.Conn, connectionId int) (string, error) {
 		switch playerState {
 		case game.WAITING_FOR_HELLO:
 			log.Printf("[server %d] WAITING_FOR_HELLO", connectionId)
-			// incoming hello message
+
 			msg, err := waitForMessage(conn)
 			if err != nil {
 				log.Printf("[server] error reading message: %v", err)
-				return "", err
+				return err
 			}
 
 			response, err := gm.handleHelloCommand(msg, connectionId)
 			if err != nil {
 				log.Println("Error handling HELLO command:", err)
-				return "", err
+				return err
 			}
 			sendMessage(conn, response)
 
@@ -94,13 +100,13 @@ func (gm *GameManager) handle(conn net.Conn, connectionId int) (string, error) {
 			msg, err := waitForMessage(conn)
 			if err != nil {
 				log.Printf("[server] error reading message: %v", err)
-				return "", err
+				return err
 			}
 
 			response, err := gm.handleShipCommand(msg, connectionId)
 			if err != nil {
 				log.Println("Error handling command:", err)
-				return "", err
+				return err
 			}
 			sendMessage(conn, response)
 
@@ -113,9 +119,6 @@ func (gm *GameManager) handle(conn net.Conn, connectionId int) (string, error) {
 					player.State = game.WAITING_FOR_ATTACK
 				}
 			}
-			// else {
-			// 	gameState.readyChan <- thisGame.GetPlayer(connectionId).GetPlayerCode()
-			// }
 
 		case game.PLAYING:
 			for i := 0; i != game.TURN_MAX_ATTACKS; i++ {
@@ -123,15 +126,23 @@ func (gm *GameManager) handle(conn net.Conn, connectionId int) (string, error) {
 				msg, err := waitForMessage(conn)
 				if err != nil {
 					log.Printf("[server %d] error reading message: %v", connectionId, err)
-					return "", err
+					return err
 				}
 				log.Printf("[server %d] PLAYING received message: %s", connectionId, msg)
 				response, err := gm.handleAttackCommand(msg, connectionId)
 				if err != nil {
 					log.Printf("[server %d] error handling command: %v", connectionId, err)
-					return "", err
+					return err
 				}
+
+				// broadcast to both players
 				sendMessage(conn, response)
+				sendMessage(gm.getOtherConn(connectionId), response)
+
+				if player.State == game.WON {
+					log.Printf("[server %d] game over", connectionId)
+					return nil
+				}
 			}
 			player.State = game.WAITING_FOR_ATTACK
 			oponent := thisGame.GetOtherPlayer(connectionId)
@@ -144,7 +155,7 @@ func (gm *GameManager) handle(conn net.Conn, connectionId int) (string, error) {
 			log.Printf("[server %d] received signal: %s", connectionId, signalMsg)
 
 			if signalMsg != thisGame.GetPlayer(connectionId).GetPlayerCode() {
-				return "", fmt.Errorf("invalid state, should be %s", thisGame.GetPlayer(connectionId).GetPlayerCode())
+				return fmt.Errorf("invalid state, should be %s", thisGame.GetPlayer(connectionId).GetPlayerCode())
 			}
 
 			sendMessage(conn, fmt.Sprintf("TURN %s\n", player.GetPlayerCode()))
@@ -420,7 +431,12 @@ func (gm *GameManager) handleAttackCommand(msg string, connectionId int) (string
 	y := parts[2]
 	hit, sunkShipType := opponent.ReceiveAttack(x, y)
 
-	// TODO check if the game is over
+	// check if the game is over
+	if opponent.AllShipsSunk() {
+		log.Printf("Game over, player %s wins", player.GetPlayerCode())
+		player.State = game.WON
+		return fmt.Sprintf("WIN %s\n", player.GetPlayerCode()), nil
+	}
 
 	var attackResult string
 	if hit {

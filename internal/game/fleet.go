@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"log"
 )
 
 const (
@@ -52,9 +53,15 @@ func (f *Fleet) receiveAttack(position Vector2) (bool, *ShipType) {
 	ship.receiveAttack()
 	f.remainingShipUnits--
 
+	log.Printf("[fleet] remaining ship units: %d", f.remainingShipUnits)
+
 	if ship.isSunk() {
 		return true, &ship.shipType
 	} else {
 		return true, nil
 	}
+}
+
+func (f *Fleet) allShipsSunk() bool {
+	return f.remainingShipUnits == 0
 }

@@ -12,6 +12,7 @@ const (
 	SETUP_FLEET
 	PLAYING
 	WAITING_FOR_ATTACK
+	WON
 )
 
 type Player struct {
@@ -74,4 +75,8 @@ func (p *Player) getNumber() int {
 		number = 2
 	}
 	return number
+}
+
+func (p *Player) AllShipsSunk() bool {
+	return p.Fleet.allShipsSunk()
 }
