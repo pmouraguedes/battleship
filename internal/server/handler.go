@@ -60,11 +60,12 @@ func (gm *GameManager) handle(conn net.Conn, connectionId int) error {
 	thisGame := gm.getGame(connectionId)
 	gameState := gm.games[connectionId]
 
+outer:
 	for {
-		if gm.getGame(connectionId).TurnCount > 1 {
-			log.Printf("[server %d] game over", connectionId)
-			return nil
-		}
+		// if gm.getGame(connectionId).TurnCount > 1 {
+		// 	log.Printf("[server %d] game over", connectionId)
+		// 	return nil
+		// }
 
 		player := thisGame.GetPlayer(connectionId)
 
@@ -141,7 +142,12 @@ func (gm *GameManager) handle(conn net.Conn, connectionId int) error {
 
 				if player.State == game.WON {
 					log.Printf("[server %d] game over", connectionId)
-					return nil
+
+					// wake opponent up
+					oponent := thisGame.GetOtherPlayer(connectionId)
+					gameState.readyChan <- oponent.GetPlayerCode()
+
+					continue outer
 				}
 			}
 			player.State = game.WAITING_FOR_ATTACK
@@ -154,37 +160,30 @@ func (gm *GameManager) handle(conn net.Conn, connectionId int) error {
 			signalMsg := <-gameState.readyChan
 			log.Printf("[server %d] received signal: %s", connectionId, signalMsg)
 
+			if player.State != game.WAITING_FOR_ATTACK {
+				// state changed, probably other player won
+				log.Printf("[server %d] state changed, probably other player won", connectionId)
+				continue outer
+			}
+
 			if signalMsg != thisGame.GetPlayer(connectionId).GetPlayerCode() {
 				return fmt.Errorf("invalid state, should be %s", thisGame.GetPlayer(connectionId).GetPlayerCode())
 			}
 
+			time.Sleep(50 * time.Millisecond)
 			sendMessage(conn, fmt.Sprintf("TURN %s\n", player.GetPlayerCode()))
 			player.State = game.PLAYING
+
+		// won or lost
+		case game.WON, game.LOST:
+			log.Printf("[server %d] game is over, closing socket...", connectionId)
+			conn.Close()
+			break outer
 		}
 	}
 
-	// // message: HELLO <player_name>
-	// if strings.HasPrefix(msg, "HELLO") {
-	// 	return gm.handleHelloCommand(msg, connectionId)
-	// }
-	//
-	// // message: SHIP <ship_type> <x> <y> <direction>
-	// if strings.HasPrefix(msg, "SHIP") {
-	// 	return gm.handleShipCommand(msg, connectionId)
-	// }
-	//
-	// // message: READY
-	// if strings.HasPrefix(msg, "READY") {
-	// 	// set the player as ready and write to the channel
-	// 	return gm.handleReadyCommand(msg, connectionId)
-	// }
-	//
-	// // message: ATTACK <x> <y>
-	// if strings.HasPrefix(msg, "ATTACK") {
-	// 	return gm.handleAttackCommand(msg, connectionId)
-	// }
-	//
-	// return "ERROR Invalid command\n", fmt.Errorf("invalid command")
+	log.Printf("[server %d] game is over, exiting thread...", connectionId)
+	return nil
 }
 
 func (gm *GameManager) handleHelloCommand(msg string, connectionId int) (string, error) {
@@ -433,8 +432,9 @@ func (gm *GameManager) handleAttackCommand(msg string, connectionId int) (string
 
 	// check if the game is over
 	if opponent.AllShipsSunk() {
-		log.Printf("Game over, player %s wins", player.GetPlayerCode())
+		log.Printf("[server %d] Game over, player %s wins", connectionId, player.GetPlayerCode())
 		player.State = game.WON
+		opponent.State = game.LOST
 		return fmt.Sprintf("WIN %s\n", player.GetPlayerCode()), nil
 	}
 

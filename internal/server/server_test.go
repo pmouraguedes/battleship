@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"strings"
@@ -12,10 +13,49 @@ import (
 	"github.com/pmouraguedes/battleship/internal/game"
 )
 
+var POSITIONS = [25]game.Vector2{
+	// carrier
+	{X: 1, Y: 1},
+	{X: 2, Y: 1},
+	{X: 3, Y: 1},
+	{X: 3, Y: 2},
+	{X: 3, Y: 0},
+	// cruiser
+	{X: 5, Y: 0},
+	{X: 5, Y: 1},
+	{X: 5, Y: 2},
+	{X: 5, Y: 3},
+	// battleship 1
+	{X: 6, Y: 7},
+	{X: 7, Y: 7},
+	{X: 8, Y: 7},
+	// battleship 2
+	{X: 0, Y: 7},
+	{X: 1, Y: 7},
+	{X: 2, Y: 7},
+	// destroyer 1
+	{X: 4, Y: 5},
+	{X: 5, Y: 5},
+	// destroyer 2
+	{X: 0, Y: 3},
+	{X: 0, Y: 4},
+	// destroyer 3
+	{X: 7, Y: 0},
+	{X: 8, Y: 0},
+	// submarine 1
+	{X: 9, Y: 2},
+	// submarine 2
+	{X: 9, Y: 4},
+	// submarine 3
+	{X: 9, Y: 9},
+	// submarine 4
+	{X: 0, Y: 9},
+}
+
 var (
 	turnPlayerCode = "P1"
-	dualChan       = make(chan int, 2)
-	singleChan     = make(chan int, 1)
+	// dualChan       = make(chan int, 2)
+	// singleChan = make(chan int, 1)
 	// finishChan     = make(chan int, 1)
 	// chanUnbuf = make(chan int)
 	errChan = make(chan error, 2)
@@ -93,28 +133,50 @@ func doClientStuff(conn net.Conn, clientCode string, clientName string) {
 	// sleep for a while to allow the server to process the messages
 	// time.Sleep(100 * time.Millisecond)
 
+	attacks := 0
+
 	for {
-		msg := readResponse(conn)
+		msg, err := readResponse(conn)
+		if err == io.EOF {
+			log.Printf("[client %s] connection closed by server", clientCode)
+			break
+		} else if err != nil {
+			errChan <- fmt.Errorf("Error reading response: %v", err)
+			return
+		}
+
 		log.Printf("[client %s] received: %s", clientCode, msg)
 		if msg == fmt.Sprintf("TURN %s\n", clientCode) {
 			log.Printf("[client %s] received TURN message", clientCode)
 
 			// ATTACK messages
-			sendAttackMessages(conn, clientCode)
+			sendAttackMessages(conn, clientCode, attacks)
+			attacks += 3
+		} else if gameOver := strings.HasPrefix(msg, "WIN"); gameOver {
+			log.Printf("[client %s] received WIN message", clientCode)
 		}
 	}
 }
 
-func sendAttackMessages(conn net.Conn, clientCode string) {
-	log.Printf("[client %s] sending attack messages", clientCode)
-
+func sendAttackMessages(conn net.Conn, clientCode string, attacks int) {
 	for i := 0; i != game.TURN_MAX_ATTACKS; i++ {
-		attackMessage := fmt.Sprintf("ATTACK %d %d\n", i, i)
+		log.Printf("[client %s] sending attack message #%d", clientCode, attacks+i)
+
+		position := POSITIONS[attacks+i]
+
+		attackMessage := fmt.Sprintf("ATTACK %d %d\n", position.X, position.Y)
 		sendClientMessage(conn, attackMessage)
-		resp := readResponse(conn)
+		resp, err := readResponse(conn)
+		if err != nil {
+			errChan <- fmt.Errorf("Error reading response: %v", err)
+			return
+		}
 		log.Printf("[client %s] received: %s", clientCode, resp)
 
-		// log.Printf("----Client %s received: %s", clientCode, resp)
+		if gameOver := strings.HasPrefix(resp, "WIN"); gameOver {
+			log.Printf("[client %s] received WIN message", clientCode)
+			break
+		}
 		if !strings.HasPrefix(resp, "HIT") &&
 			!strings.HasPrefix(resp, "MISS") &&
 			!strings.HasPrefix(resp, "SUNK") {
@@ -127,105 +189,109 @@ func sendAttackMessages(conn net.Conn, clientCode string) {
 	}
 }
 
-func sendAttackMessagesOld2(conn net.Conn, clientCode string) {
-	i := 0
-	j := 0
+// func sendAttackMessagesOld2(conn net.Conn, clientCode string) {
+// 	i := 0
+// 	j := 0
+//
+// 	for i <= 9 {
+//
+// 		log.Printf("Client %s waiting for turn", clientCode)
+// 		response := readResponse(conn)
+// 		if response != "TURN "+clientCode+"\n" {
+// 			continue
+// 		}
+//
+// 		log.Printf("Client %s received TURN message", clientCode)
+// 		for range game.TURN_MAX_ATTACKS {
+// 			attackMessage := fmt.Sprintf("ATTACK %d %d\n", i, j)
+//
+// 			sendClientMessage(conn, attackMessage)
+// 			resp := readResponse(conn)
+// 			// log.Printf("----Client %s received: %s", clientCode, resp)
+// 			if !strings.HasPrefix(resp, "HIT") &&
+// 				!strings.HasPrefix(resp, "MISS") &&
+// 				!strings.HasPrefix(resp, "SUNK") {
+// 				// log.Printf("-----Client %s received: %s", clientCode, resp)
+// 				switchTurnPlayerCode()
+// 				singleChan <- 1
+// 				errChan <- fmt.Errorf("Expected HIT or MISS message, got: %s", resp)
+// 				return
+// 			}
+// 			j++
+// 			if j > 9 {
+// 				j = 0
+// 				i++
+// 			}
+// 			if i > 9 {
+// 				break
+// 			}
+// 		}
+// 	}
+// }
 
-	for i <= 9 {
-
-		log.Printf("Client %s waiting for turn", clientCode)
-		response := readResponse(conn)
-		if response != "TURN "+clientCode+"\n" {
-			continue
-		}
-
-		log.Printf("Client %s received TURN message", clientCode)
-		for range game.TURN_MAX_ATTACKS {
-			attackMessage := fmt.Sprintf("ATTACK %d %d\n", i, j)
-
-			sendClientMessage(conn, attackMessage)
-			resp := readResponse(conn)
-			// log.Printf("----Client %s received: %s", clientCode, resp)
-			if !strings.HasPrefix(resp, "HIT") &&
-				!strings.HasPrefix(resp, "MISS") &&
-				!strings.HasPrefix(resp, "SUNK") {
-				// log.Printf("-----Client %s received: %s", clientCode, resp)
-				switchTurnPlayerCode()
-				singleChan <- 1
-				errChan <- fmt.Errorf("Expected HIT or MISS message, got: %s", resp)
-				return
-			}
-			j++
-			if j > 9 {
-				j = 0
-				i++
-			}
-			if i > 9 {
-				break
-			}
-		}
-	}
-}
-
-func sendAttackMessagesOld(conn net.Conn, clientCode string) {
-	i := 0
-	j := 0
-	// n := 0
-
-	if turnPlayerCode != clientCode {
-		<-singleChan
-	}
-
-	for {
-		for range game.TURN_MAX_ATTACKS {
-			if turnPlayerCode != clientCode {
-				log.Printf("Client %s waiting for turn", clientCode)
-				<-singleChan
-			}
-
-			attackMessage := fmt.Sprintf("ATTACK %d %d\n", i, j)
-
-			sendClientMessage(conn, attackMessage)
-			resp := readResponse(conn)
-			// log.Printf("----Client %s received: %s", clientCode, resp)
-			if !strings.HasPrefix(resp, "HIT") &&
-				!strings.HasPrefix(resp, "MISS") &&
-				!strings.HasPrefix(resp, "SUNK") {
-				// log.Printf("-----Client %s received: %s", clientCode, resp)
-				switchTurnPlayerCode()
-				singleChan <- 1
-				errChan <- fmt.Errorf("Expected HIT or MISS message, got: %s", resp)
-				return
-			}
-			j++
-			if j > 9 {
-				j = 0
-				i++
-			}
-			if i > 9 {
-				break
-			}
-		}
-
-		switchTurnPlayerCode()
-
-		log.Printf("Client %s sending singleChan signal", clientCode)
-		singleChan <- 1
-
-		if i > 9 {
-			break
-		}
-	}
-	log.Printf("Client %s finished sending attack messages", clientCode)
-
-	errChan <- nil
-}
+// func sendAttackMessagesOld(conn net.Conn, clientCode string) {
+// 	i := 0
+// 	j := 0
+// 	// n := 0
+//
+// 	if turnPlayerCode != clientCode {
+// 		<-singleChan
+// 	}
+//
+// 	for {
+// 		for range game.TURN_MAX_ATTACKS {
+// 			if turnPlayerCode != clientCode {
+// 				log.Printf("Client %s waiting for turn", clientCode)
+// 				<-singleChan
+// 			}
+//
+// 			attackMessage := fmt.Sprintf("ATTACK %d %d\n", i, j)
+//
+// 			sendClientMessage(conn, attackMessage)
+// 			resp := readResponse(conn)
+// 			// log.Printf("----Client %s received: %s", clientCode, resp)
+// 			if !strings.HasPrefix(resp, "HIT") &&
+// 				!strings.HasPrefix(resp, "MISS") &&
+// 				!strings.HasPrefix(resp, "SUNK") {
+// 				// log.Printf("-----Client %s received: %s", clientCode, resp)
+// 				switchTurnPlayerCode()
+// 				singleChan <- 1
+// 				errChan <- fmt.Errorf("Expected HIT or MISS message, got: %s", resp)
+// 				return
+// 			}
+// 			j++
+// 			if j > 9 {
+// 				j = 0
+// 				i++
+// 			}
+// 			if i > 9 {
+// 				break
+// 			}
+// 		}
+//
+// 		switchTurnPlayerCode()
+//
+// 		log.Printf("Client %s sending singleChan signal", clientCode)
+// 		singleChan <- 1
+//
+// 		if i > 9 {
+// 			break
+// 		}
+// 	}
+// 	log.Printf("Client %s finished sending attack messages", clientCode)
+//
+// 	errChan <- nil
+// }
 
 func sendHelloMessage(conn net.Conn, clientCode string, clientName string) {
 	helloMessage := "HELLO " + clientName + "\n"
 	sendClientMessage(conn, helloMessage)
 
-	response := readResponse(conn)
+	response, err := readResponse(conn)
+	if err != nil {
+		errChan <- fmt.Errorf("Error reading response: %v", err)
+		return
+	}
 	if response != "WELCOME "+clientCode+" "+clientName+"\n" {
 		errChan <- fmt.Errorf("Expected welcome message, got: %s", response)
 		return
@@ -238,7 +304,11 @@ func sendFleetMessages(conn net.Conn, clientCode string) {
 	// carrier
 	carrierMessage := "SHIP CARRIER 1 1 H\n"
 	sendClientMessage(conn, carrierMessage)
-	response := readResponse(conn)
+	response, err := readResponse(conn)
+	if err != nil {
+		errChan <- fmt.Errorf("Error reading response: %v", err)
+		return
+	}
 	if response != "OK SHIP CARRIER\n" {
 		// t.Fatalf("Expected OK message, got: %s", response)
 		errChan <- fmt.Errorf("Expected OK message, got: %s", response)
@@ -247,7 +317,11 @@ func sendFleetMessages(conn net.Conn, clientCode string) {
 	// cruiser
 	cruiserMessage := "SHIP CRUISER 5 0 V"
 	sendClientMessage(conn, cruiserMessage)
-	response = readResponse(conn)
+	response, err = readResponse(conn)
+	if err != nil {
+		errChan <- fmt.Errorf("Error reading response: %v", err)
+		return
+	}
 	if response != "OK SHIP CRUISER\n" {
 		errChan <- fmt.Errorf("Expected OK message, got: %s", response)
 		return
@@ -259,7 +333,11 @@ func sendFleetMessages(conn net.Conn, clientCode string) {
 	}
 	for _, msg := range battleshipMessages {
 		sendClientMessage(conn, msg)
-		response = readResponse(conn)
+		response, err := readResponse(conn)
+		if err != nil {
+			errChan <- fmt.Errorf("Error reading response: %v", err)
+			return
+		}
 		if response != "OK SHIP BATTLESHIP\n" {
 			errChan <- fmt.Errorf("Expected OK message, got: %s", response)
 			return
@@ -273,7 +351,11 @@ func sendFleetMessages(conn net.Conn, clientCode string) {
 	}
 	for _, msg := range destroyerMessages {
 		sendClientMessage(conn, msg)
-		response = readResponse(conn)
+		response, err := readResponse(conn)
+		if err != nil {
+			errChan <- fmt.Errorf("Error reading response: %v", err)
+			return
+		}
 		if response != "OK SHIP DESTROYER\n" {
 			errChan <- fmt.Errorf("Expected OK message, got: %s", response)
 			return
@@ -288,7 +370,12 @@ func sendFleetMessages(conn net.Conn, clientCode string) {
 	}
 	for _, msg := range submarineMessages {
 		sendClientMessage(conn, msg)
-		response = readResponse(conn)
+		response, err := readResponse(conn)
+		if err != nil {
+			errChan <- fmt.Errorf("Error reading response: %v", err)
+			return
+		}
+
 		if response != "OK SHIP SUBMARINE\n" {
 			errChan <- fmt.Errorf("Expected OK message, got: %s", response)
 			return
@@ -298,7 +385,12 @@ func sendFleetMessages(conn net.Conn, clientCode string) {
 	log.Printf("[client %s] finished sending fleet messages", clientCode)
 	sendClientMessage(conn, "READY\n")
 
-	response = readResponse(conn)
+	response, err = readResponse(conn)
+	if err != nil {
+		errChan <- fmt.Errorf("Error reading response: %v", err)
+		return
+	}
+
 	if response != "START P1\n" {
 		errChan <- fmt.Errorf("Expected START message, got: %s", response)
 		return
@@ -308,23 +400,28 @@ func sendFleetMessages(conn net.Conn, clientCode string) {
 	// dualChan <- 1
 }
 
-func readResponse(conn net.Conn) string {
+func readResponse(conn net.Conn) (string, error) {
 	buf := make([]byte, 1024)
 	n, err := conn.Read(buf)
 	if err != nil {
-		log.Println("Error reading response:", err)
-		return ""
+		if err == io.EOF {
+			log.Println("[test] connection closed by server")
+		} else {
+			log.Println("Error reading response:", err)
+		}
+		return "", err
 	}
-	return string(buf[:n])
+
+	return string(buf[:n]), nil
 }
 
-func switchTurnPlayerCode() {
-	if turnPlayerCode == "P1" {
-		turnPlayerCode = "P2"
-	} else {
-		turnPlayerCode = "P1"
-	}
-}
+// func switchTurnPlayerCode() {
+// 	if turnPlayerCode == "P1" {
+// 		turnPlayerCode = "P2"
+// 	} else {
+// 		turnPlayerCode = "P1"
+// 	}
+// }
 
 func sendClientMessage(conn net.Conn, message string) error {
 	log.Printf("[client] sendClientMessage - sending: %s", message)

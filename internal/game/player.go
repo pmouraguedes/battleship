@@ -13,6 +13,7 @@ const (
 	PLAYING
 	WAITING_FOR_ATTACK
 	WON
+	LOST
 )
 
 type Player struct {
