@@ -33,7 +33,6 @@ func (f *Fleet) addShip(ship *Ship) error {
 		}
 		f.positions[position] = ship
 
-		// increment fleet unit size
 		f.UnitSize++
 	}
 	return nil

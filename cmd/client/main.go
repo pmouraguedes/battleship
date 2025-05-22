@@ -1,24 +1,24 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"log"
-	"net"
-	"os"
+	"github.com/pmouraguedes/battleship/internal/client"
 )
 
 func main() {
-	conn, err := net.Dial("tcp", ":8000")
+	// box := tview.NewBox().SetBorder(true).SetTitle("Hello, world!")
+	// if err := tview.NewApplication().SetRoot(box, true).Run(); err != nil {
+	// 	panic(err)
+	// }
+	// if true {
+	// 	return
+	// }
+
+	c, err := client.NewClient()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
-	for {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("Text to send: ")
-		text, _ := reader.ReadString('\n')
-		fmt.Fprintf(conn, text+"\n")
-		message, _ := bufio.NewReader(conn).ReadString('\n')
-		fmt.Print("Message from server: " + message)
+	println("Client started", c)
+	if err := c.Run(); err != nil {
+		panic(err)
 	}
 }
